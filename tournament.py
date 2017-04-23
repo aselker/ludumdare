@@ -29,10 +29,7 @@ class Match:
         else:
             self.roundsLeft -= 1
 
-        if self.moves == []:
-            self.moves = [move] #When the list is empty, adding a tuple will instead add the tuple's elements in order, creating a list of Moves objects instead
-        else:
-            self.moves += move
+        self.moves += [move]
             
         return self
         
@@ -40,26 +37,42 @@ class Match:
         
 class Bot:
 
-    history = [] #Format: (opponent, [(myMove, otherMove), (myMove, otherMove), ... ])
+    def addHist(self, opponent, moves):
+        if not hasattr(self, 'history'):
+            self.history = {}
+            
+        if opponent in self.history:
+            self.history[type(opponent)] += [moves]
+        else:
+            self.history[type(opponent)] = [moves]
+
+        print ("New history for " + str(type(opponent)) + ": " + str(self.history[type(opponent)]))
+
+        return self
+            
 
     def decision(self, opponent, match): #match is ( [(myMove, otherMove), (myMove, otherMove), ...] , roundsLeft )
-        return True
+        pass
 
     def simulate(self, opponent, match):
         return self.decision(opponent, match)   #For now... eventually will include time-boxing
 
 
 class CooperateBot(Bot):
-    def decisiono(self, opponent, match):
+    name = "CooperateBot"
+    
+    def decision(self, opponent, match):
         return True
 
 
 class DefectBot(Bot):
+    name = "DefectBot"
     def decision(self, opponent, match):
         return False
 
     
 class RandomBot(Bot):
+    name = "RandomBot"
     def decision(self, opponent, match):
         if random.randint(0,1) == 0:
             return True
@@ -68,6 +81,7 @@ class RandomBot(Bot):
     
 
 class TitForTat(Bot):
+    name = "TitForTat"
     def decision(self, opponent, match):
         if len(match.moves) == 0:
             return True
@@ -79,12 +93,23 @@ class TitForTat(Bot):
             
         
 class PredictBot(Bot):
+    name = "PredictBot"
     def decision(self, opponent, match):
-        rD = opponent.simulate(self, deepcopy(match).add( (Moves.d,Moves.d) ).flip() ) #Should add to virtual PredictBot's history
+        
+        dSelf = deepcopy(self).addHist(opponent, (Moves.d,Moves.d))
+        dOpponent = deepcopy(opponent).addHist(self, (Moves.d,Moves.d))
+        dMatch = deepcopy(match).add( (Moves.d,Moves.d) ).flip()
+        rD = dOpponent.simulate(dSelf, dMatch)
+        
         if rD == Moves.c:
             return False #Defect if it's not punished -- don't bother simulating cooperation
         else:
-            rC = opponent.simulate(self, deepcopy(match).add( (Moves.c,Moves.c) ).flip() )
+
+            cSelf = deepcopy(self).addHist(opponent, (Moves.c,Moves.c))
+            cOpponent = deepcopy(opponent).addHist(self, (Moves.c,Moves.c))
+            cMatch = deepcopy(match).add( (Moves.c,Moves.c) ).flip()
+            rC = dOpponent.simulate(cSelf, cMatch)
+            
             if rC == Moves.d: #If they don't care / will defect either way
                 return False
             else:
@@ -93,7 +118,30 @@ class PredictBot(Bot):
 
 
 
+
+def runRound(bot1, bot2, match):
+    move1 = bot1.simulate(bot2, match)
+    move2 = bot2.simulate(bot1, deepcopy(match).flip())
+
+    bot1.addHist(bot2, (move1, move2))
+    bot2.addHist(bot1, (move2, move1))
+
+    match.add((move1, move2))
+
+    
+def runMatch(bot1, bot2, rounds):
+
+    match = Match(rounds)
+
+    for i in range(rounds):
+        runRound(bot1, bot2, match)
+
+
+    
 bot1 = PredictBot()
 bot2 = DefectBot()
-thisMatch = Match(100)
-print (bot1.simulate(bot2, thisMatch))
+
+runMatch(bot1, bot2, 10)
+print(bot1.history)
+
+#print(type(bot1))
